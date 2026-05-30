@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 st.title("📈 AI Portfolio Manager")
-st.caption("Dashboard cuantitativo de precios, riesgo, momentum y benchmark.")
+st.caption("Dashboard cuantitativo de precios, riesgo, momentum, benchmark y drawdown.")
 
 st.markdown("""
 ### Investment Dashboard
@@ -21,6 +21,7 @@ Sistema cuantitativo de análisis de carteras basado en:
 - Risk Metrics
 - Benchmark Comparison
 - Portfolio Construction
+- Drawdown Analysis
 
 Datos obtenidos en tiempo real mediante Yahoo Finance.
 """)
@@ -140,21 +141,37 @@ mom_ann_vol = mom_portfolio_returns.std() * np.sqrt(252)
 mom_sharpe = mom_ann_return / mom_ann_vol if mom_ann_vol != 0 else np.nan
 
 # -----------------------------
+# Drawdown
+# -----------------------------
+portfolio_cum = (1 + portfolio_returns).cumprod()
+benchmark_cum = (1 + benchmark_returns).cumprod()
+mom_cum = (1 + mom_portfolio_returns).cumprod()
+
+portfolio_drawdown = portfolio_cum / portfolio_cum.cummax() - 1
+benchmark_drawdown = benchmark_cum / benchmark_cum.cummax() - 1
+mom_drawdown = mom_cum / mom_cum.cummax() - 1
+
+max_dd_portfolio = portfolio_drawdown.min()
+max_dd_benchmark = benchmark_drawdown.min()
+max_dd_momentum = mom_drawdown.min()
+
+# -----------------------------
 # Top KPIs
 # -----------------------------
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 
 col1.metric("Activos", len(asset_cols))
 col2.metric("Rentabilidad anual", f"{ann_return:.2%}")
 col3.metric("Volatilidad anual", f"{ann_vol:.2%}")
 col4.metric("Sharpe Ratio", f"{sharpe:.2f}")
+col5.metric("Max Drawdown", f"{max_dd_portfolio:.2%}")
 
-col5, col6, col7, col8 = st.columns(4)
+col6, col7, col8, col9 = st.columns(4)
 
-col5.metric("Benchmark", benchmark)
-col6.metric("Rent. Benchmark", f"{benchmark_ann_return:.2%}")
-col7.metric("Mejor activo", best_asset)
-col8.metric("Momentum Sharpe", f"{mom_sharpe:.2f}")
+col6.metric("Benchmark", benchmark)
+col7.metric("Rent. Benchmark", f"{benchmark_ann_return:.2%}")
+col8.metric("Mejor activo", best_asset)
+col9.metric("Momentum Sharpe", f"{mom_sharpe:.2f}")
 
 st.divider()
 
@@ -167,9 +184,6 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs(
 
 with tab1:
     st.subheader("Comparación cartera vs benchmark")
-
-    portfolio_cum = (1 + portfolio_returns).cumprod()
-    benchmark_cum = (1 + benchmark_returns).cumprod()
 
     compare = pd.DataFrame({
         "Cartera igual ponderada": portfolio_cum,
@@ -283,6 +297,41 @@ with tab4:
             "Volatilidad diaria": "{:.4f}",
             "Retorno anual": "{:.2%}",
             "Volatilidad anual": "{:.2%}",
+        }),
+        use_container_width=True
+    )
+
+    st.subheader("Drawdown")
+
+    drawdown_df = pd.DataFrame({
+        "Cartera igual ponderada": portfolio_drawdown,
+        benchmark: benchmark_drawdown,
+        "Cartera Momentum": mom_drawdown
+    })
+
+    fig_dd = px.line(
+        drawdown_df,
+        x=drawdown_df.index,
+        y=drawdown_df.columns,
+        title="Drawdown histórico"
+    )
+    st.plotly_chart(fig_dd, use_container_width=True)
+
+    dd_summary = pd.DataFrame({
+        "Max Drawdown": [
+            max_dd_portfolio,
+            max_dd_benchmark,
+            max_dd_momentum
+        ]
+    }, index=[
+        "Cartera igual ponderada",
+        benchmark,
+        "Cartera Momentum"
+    ])
+
+    st.dataframe(
+        dd_summary.style.format({
+            "Max Drawdown": "{:.2%}"
         }),
         use_container_width=True
     )
