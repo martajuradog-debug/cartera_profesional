@@ -3,6 +3,7 @@ import pandas as pd
 import yfinance as yf
 import plotly.express as px
 import numpy as np
+import datetime
 
 st.set_page_config(
     page_title="AI Portfolio Manager",
@@ -12,6 +13,17 @@ st.set_page_config(
 
 st.title("📈 AI Portfolio Manager")
 st.caption("Dashboard cuantitativo de precios, riesgo, momentum y benchmark.")
+
+st.markdown("""
+### Investment Dashboard
+Sistema cuantitativo de análisis de carteras basado en:
+- Momentum
+- Risk Metrics
+- Benchmark Comparison
+- Portfolio Construction
+
+Datos obtenidos en tiempo real mediante Yahoo Finance.
+""")
 
 # -----------------------------
 # Sidebar
@@ -30,7 +42,11 @@ benchmark = st.sidebar.selectbox(
     index=0
 )
 
-start_date = st.sidebar.date_input("Fecha inicial")
+start_date = st.sidebar.date_input(
+    "Fecha inicial",
+    value=datetime.date(2020, 1, 1)
+)
+
 lookback = st.sidebar.slider(
     "Ventana Momentum (días bursátiles)",
     min_value=20,
@@ -58,17 +74,21 @@ prices = raw["Close"].copy()
 if isinstance(prices, pd.Series):
     prices = prices.to_frame()
 
-# Keep selected tickers + benchmark only, in case yfinance returns extra columns
+# Keep selected tickers + benchmark only
 prices = prices.loc[:, [c for c in prices.columns if c in all_tickers]]
 
 if benchmark not in prices.columns:
     st.error(f"No se ha podido cargar el benchmark {benchmark}.")
     st.stop()
 
+if len(prices) < 2:
+    st.error("No hay suficientes datos para calcular retornos. Selecciona una fecha inicial más antigua.")
+    st.stop()
+
 returns = prices.pct_change().dropna()
 
 if returns.empty:
-    st.error("No hay suficientes datos para calcular retornos.")
+    st.error("No hay suficientes datos para calcular retornos. Selecciona una fecha inicial más antigua.")
     st.stop()
 
 # Separate portfolio assets from benchmark
@@ -97,7 +117,6 @@ benchmark_ann_return = benchmark_returns.mean() * 252
 benchmark_ann_vol = benchmark_returns.std() * np.sqrt(252)
 
 best_asset = ((asset_prices.iloc[-1] / asset_prices.iloc[0]) - 1).sort_values(ascending=False).index[0]
-top_asset_return = ((asset_prices.iloc[-1] / asset_prices.iloc[0]) - 1).max()
 
 # Momentum
 if len(asset_prices) > lookback:
@@ -165,13 +184,22 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("### Métricas del modelo")
+    benchmark_sharpe = benchmark_ann_return / benchmark_ann_vol if benchmark_ann_vol != 0 else np.nan
+
     metrics_df = pd.DataFrame({
         "Rentabilidad anual": [ann_return, benchmark_ann_return, mom_ann_return],
         "Volatilidad anual": [ann_vol, benchmark_ann_vol, mom_ann_vol],
-        "Sharpe": [sharpe, benchmark_ann_return / benchmark_ann_vol if benchmark_ann_vol != 0 else np.nan, mom_sharpe]
+        "Sharpe": [sharpe, benchmark_sharpe, mom_sharpe]
     }, index=["Cartera igual ponderada", benchmark, "Cartera Momentum"])
 
-    st.dataframe(metrics_df.style.format("{:.2%}", subset=["Rentabilidad anual", "Volatilidad anual"]).format("{:.2f}", subset=["Sharpe"]), use_container_width=True)
+    st.dataframe(
+        metrics_df.style.format({
+            "Rentabilidad anual": "{:.2%}",
+            "Volatilidad anual": "{:.2%}",
+            "Sharpe": "{:.2f}"
+        }),
+        use_container_width=True
+    )
 
 with tab2:
     st.subheader("Precios históricos")
@@ -213,7 +241,13 @@ with tab3:
     st.plotly_chart(fig_mom, use_container_width=True)
 
     st.markdown("### Pesos de la cartera Momentum")
-    st.dataframe(momentum_df.style.format({"Momentum": "{:.2%}", "Peso": "{:.2%}"}), use_container_width=True)
+    st.dataframe(
+        momentum_df.style.format({
+            "Momentum": "{:.2%}",
+            "Peso": "{:.2%}"
+        }),
+        use_container_width=True
+    )
 
     st.markdown("### Pesos iguales vs Momentum")
     weights_compare = pd.DataFrame({
