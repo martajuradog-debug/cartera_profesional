@@ -252,6 +252,33 @@ factor_df = pd.DataFrame({
 })
 
 # -----------------------------
+# Sector analysis
+# -----------------------------
+sector_map_series = pd.Series({t: SECTOR_MAP.get(t, "Other") for t in asset_cols})
+
+sector_returns = pd.DataFrame(index=asset_returns.index)
+for sector in sorted(sector_map_series.unique()):
+    sector_assets = sector_map_series[sector_map_series == sector].index.tolist()
+    if sector_assets:
+        sector_returns[sector] = asset_returns[sector_assets].mean(axis=1)
+
+if not sector_returns.empty:
+    sector_cum = (1 + sector_returns).cumprod()
+
+    sector_metrics = pd.DataFrame({
+        "Rentabilidad anual": sector_returns.mean() * 252,
+        "Volatilidad anual": sector_returns.std() * np.sqrt(252),
+    })
+    sector_metrics["Sharpe"] = np.where(
+        sector_metrics["Volatilidad anual"] != 0,
+        sector_metrics["Rentabilidad anual"] / sector_metrics["Volatilidad anual"],
+        np.nan
+    )
+else:
+    sector_cum = pd.DataFrame()
+    sector_metrics = pd.DataFrame()
+
+# -----------------------------
 # Black-Litterman (optional)
 # -----------------------------
 bl_available = PYPFOPT_AVAILABLE and len(asset_cols) >= 2
@@ -540,6 +567,36 @@ with tab6:
         }),
         use_container_width=True
     )
+
+    st.subheader("Sectores más interesantes para invertir")
+
+    if sector_returns.empty:
+        st.info("No hay suficientes datos para analizar sectores.")
+    else:
+        fig_sector_perf = px.line(
+            sector_cum,
+            x=sector_cum.index,
+            y=sector_cum.columns,
+            title="Rentabilidad acumulada por sector"
+        )
+        st.plotly_chart(fig_sector_perf, use_container_width=True)
+
+        best_sector = sector_metrics["Sharpe"].idxmax()
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Mejor sector", best_sector)
+        c2.metric("Rentabilidad líder", f"{sector_metrics.loc[best_sector, 'Rentabilidad anual']:.2%}")
+        c3.metric("Sharpe líder", f"{sector_metrics.loc[best_sector, 'Sharpe']:.2f}")
+
+        st.markdown("### Ranking de sectores")
+        st.dataframe(
+            sector_metrics.sort_values("Sharpe", ascending=False).style.format({
+                "Rentabilidad anual": "{:.2%}",
+                "Volatilidad anual": "{:.2%}",
+                "Sharpe": "{:.2f}"
+            }),
+            use_container_width=True
+        )
 
 with tab7:
     st.subheader("Forecast heurístico")
