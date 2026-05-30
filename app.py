@@ -115,6 +115,7 @@ sharpe = ann_return / ann_vol if ann_vol != 0 else np.nan
 
 benchmark_ann_return = benchmark_returns.mean() * 252
 benchmark_ann_vol = benchmark_returns.std() * np.sqrt(252)
+benchmark_sharpe = benchmark_ann_return / benchmark_ann_vol if benchmark_ann_vol != 0 else np.nan
 
 best_asset = ((asset_prices.iloc[-1] / asset_prices.iloc[0]) - 1).sort_values(ascending=False).index[0]
 
@@ -184,8 +185,6 @@ with tab1:
     st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("### Métricas del modelo")
-    benchmark_sharpe = benchmark_ann_return / benchmark_ann_vol if benchmark_ann_vol != 0 else np.nan
-
     metrics_df = pd.DataFrame({
         "Rentabilidad anual": [ann_return, benchmark_ann_return, mom_ann_return],
         "Volatilidad anual": [ann_vol, benchmark_ann_vol, mom_ann_vol],
@@ -227,16 +226,17 @@ with tab3:
     st.subheader("Señal Momentum")
     st.write(f"Ventana usada: **{lookback}** días bursátiles")
 
-    momentum_df = momentum.rename("Momentum").to_frame()
-    momentum_df["Peso"] = pd.Series(momentum_weights)
+    momentum_df = momentum.rename("Momentum").to_frame().reset_index()
+    momentum_df.columns = ["Activo", "Momentum"]
+
+    momentum_df["Peso"] = momentum_weights.reindex(momentum_df["Activo"]).values
     momentum_df = momentum_df.sort_values("Momentum", ascending=False)
 
     fig_mom = px.bar(
-        momentum_df.reset_index(),
-        x="index",
+        momentum_df,
+        x="Activo",
         y="Momentum",
-        title="Ranking Momentum",
-        labels={"index": "Activo"}
+        title="Ranking Momentum"
     )
     st.plotly_chart(fig_mom, use_container_width=True)
 
