@@ -528,19 +528,24 @@ with tab7:
     st.subheader("Forecast heurístico")
     st.caption("Estimación simple basada en retornos históricos recientes. No es una predicción garantizada.")
 
+    forecast_table = forecast_df.reset_index()
+    forecast_table.columns = ["Activo", "Expected Return"]
+
     forecast_fig = px.bar(
-        forecast_df.reset_index().rename(columns={"index": "Activo"}),
-        x="index",
+        forecast_table,
+        x="Activo",
         y="Expected Return",
-        title=f"Expected Return ({forecast_horizon})",
-        labels={"index": "Activo"}
+        title=f"Expected Return ({forecast_horizon})"
     )
     st.plotly_chart(forecast_fig, use_container_width=True)
 
     st.dataframe(
-        forecast_df.style.format({"Expected Return": "{:.2%}"}),
+        forecast_table.style.format({
+            "Expected Return": "{:.2%}"
+        }),
         use_container_width=True
     )
+    
 
 with tab8:
     st.subheader("Últimas filas de datos")
