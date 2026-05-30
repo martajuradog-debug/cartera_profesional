@@ -635,7 +635,7 @@ with tab6:
         st.info(
             "No hay suficientes datos para realizar el análisis sectorial."
         )
-
+        
 with tab7:
     st.subheader("Forecast heurístico")
     st.caption("Estimación simple basada en retornos históricos recientes. No es una predicción garantizada.")
