@@ -250,6 +250,7 @@ factor_df = pd.DataFrame({
     "Peso Equal": equal_weights,
     "Peso Momentum": mom_weights_aligned.reindex(asset_cols).values
 })
+    sector_metrics = pd.DataFrame()
 
 # -----------------------------
 # Sector analysis
@@ -547,18 +548,32 @@ with tab5:
     st.dataframe(attrib_pct_df.style.format("{:.2%}"), use_container_width=True)
 
 with tab6:
+
     st.subheader("Exposición por factor / sector")
-    sector_exposure = factor_df.groupby("Sector")[["Peso Equal", "Peso Momentum"]].sum().reset_index()
+
+    sector_exposure = (
+        factor_df
+        .groupby("Sector")[["Peso Equal", "Peso Momentum"]]
+        .sum()
+        .reset_index()
+    )
 
     fig_sector = px.bar(
-        sector_exposure.melt(id_vars="Sector", var_name="Estrategia", value_name="Peso"),
+        sector_exposure.melt(
+            id_vars="Sector",
+            var_name="Estrategia",
+            value_name="Peso"
+        ),
         x="Sector",
         y="Peso",
         color="Estrategia",
         barmode="group",
         title="Exposición sectorial"
     )
+
     st.plotly_chart(fig_sector, use_container_width=True)
+
+    st.markdown("### Composición actual")
 
     st.dataframe(
         factor_df.style.format({
@@ -568,34 +583,57 @@ with tab6:
         use_container_width=True
     )
 
+    st.divider()
+
     st.subheader("Sectores más interesantes para invertir")
 
-    if sector_returns.empty:
-        st.info("No hay suficientes datos para analizar sectores.")
-    else:
+    if not sector_returns.empty:
+
         fig_sector_perf = px.line(
             sector_cum,
             x=sector_cum.index,
             y=sector_cum.columns,
             title="Rentabilidad acumulada por sector"
         )
+
         st.plotly_chart(fig_sector_perf, use_container_width=True)
 
         best_sector = sector_metrics["Sharpe"].idxmax()
 
         c1, c2, c3 = st.columns(3)
-        c1.metric("Mejor sector", best_sector)
-        c2.metric("Rentabilidad líder", f"{sector_metrics.loc[best_sector, 'Rentabilidad anual']:.2%}")
-        c3.metric("Sharpe líder", f"{sector_metrics.loc[best_sector, 'Sharpe']:.2f}")
+
+        c1.metric(
+            "Mejor sector",
+            best_sector
+        )
+
+        c2.metric(
+            "Rentabilidad anual",
+            f"{sector_metrics.loc[best_sector, 'Rentabilidad anual']:.2%}"
+        )
+
+        c3.metric(
+            "Sharpe",
+            f"{sector_metrics.loc[best_sector, 'Sharpe']:.2f}"
+        )
 
         st.markdown("### Ranking de sectores")
+
         st.dataframe(
-            sector_metrics.sort_values("Sharpe", ascending=False).style.format({
+            sector_metrics
+            .sort_values("Sharpe", ascending=False)
+            .style.format({
                 "Rentabilidad anual": "{:.2%}",
                 "Volatilidad anual": "{:.2%}",
                 "Sharpe": "{:.2f}"
             }),
             use_container_width=True
+        )
+
+    else:
+
+        st.info(
+            "No hay suficientes datos para realizar el análisis sectorial."
         )
 
 with tab7:
