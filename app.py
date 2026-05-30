@@ -6,12 +6,17 @@ import numpy as np
 import datetime
 from io import BytesIO
 
-# Excel engine fallback
-EXCEL_ENGINE = "xlsxwriter"
+# Try Excel engines safely
+EXCEL_ENGINE = None
 try:
     import xlsxwriter  # noqa: F401
+    EXCEL_ENGINE = "xlsxwriter"
 except Exception:
-    EXCEL_ENGINE = "openpyxl"
+    try:
+        import openpyxl  # noqa: F401
+        EXCEL_ENGINE = "openpyxl"
+    except Exception:
+        EXCEL_ENGINE = None
 
 # Optional Black-Litterman / portfolio optimization
 try:
@@ -159,7 +164,6 @@ if returns.empty:
 
 # Separate portfolio assets from benchmarks
 asset_cols = [c for c in tickers if c in prices.columns]
-benchmark_col = benchmark
 
 if len(asset_cols) == 0:
     st.error("No hay activos válidos seleccionados.")
@@ -167,7 +171,7 @@ if len(asset_cols) == 0:
 
 asset_prices = prices[asset_cols]
 asset_returns = returns[asset_cols]
-benchmark_returns = returns[benchmark_col]
+benchmark_returns = returns[benchmark]
 
 # -----------------------------
 # Portfolio metrics
@@ -569,6 +573,9 @@ with tab8:
     st.subheader("Descargar informe Excel")
 
     def build_excel() -> bytes:
+        if EXCEL_ENGINE is None:
+            raise ImportError("No Excel engine available. Install openpyxl or xlsxwriter.")
+
         output = BytesIO()
         with pd.ExcelWriter(output, engine=EXCEL_ENGINE) as writer:
             summary = pd.DataFrame({
@@ -593,13 +600,19 @@ with tab8:
 
         return output.getvalue()
 
-    excel_data = build_excel()
-
-    st.download_button(
-        label="Download Portfolio Report (.xlsx)",
-        data=excel_data,
-        file_name="portfolio_report.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    try:
+        excel_data = build_excel()
+        st.download_button(
+            label="Download Portfolio Report (.xlsx)",
+            data=excel_data,
+            file_name="portfolio_report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        st.warning(
+            "No se pudo generar el Excel en este despliegue. "
+            "Revisa que openpyxl/xlsxwriter estén en requirements.txt."
+        )
+        st.code(str(e))
 
     st.info(f"Frecuencia de rebalanceo seleccionada: {rebalance_frequency}")
