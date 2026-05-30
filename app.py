@@ -6,6 +6,13 @@ import numpy as np
 import datetime
 from io import BytesIO
 
+# Excel engine fallback
+EXCEL_ENGINE = "xlsxwriter"
+try:
+    import xlsxwriter  # noqa: F401
+except Exception:
+    EXCEL_ENGINE = "openpyxl"
+
 # Optional Black-Litterman / portfolio optimization
 try:
     from pypfopt import BlackLittermanModel, EfficientFrontier, risk_models, expected_returns
@@ -45,7 +52,16 @@ UNIVERSE = [
     "SPY", "QQQ", "IWM", "VEA", "EEM", "GLD", "TLT", "AGG"
 ]
 
-BENCHMARKS = ["SPY", "QQQ", "IWM", "VEA", "EEM", "AGG"]
+BENCHMARK_MAP = {
+    "S&P 500 (SPY)": "SPY",
+    "Nasdaq 100 (QQQ)": "QQQ",
+    "Russell 2000 (IWM)": "IWM",
+    "Developed Markets (VEA)": "VEA",
+    "Emerging Markets (EEM)": "EEM",
+    "US Bonds (AGG)": "AGG"
+}
+
+TICKER_TO_BENCHMARK_NAME = {v: k for k, v in BENCHMARK_MAP.items()}
 
 SECTOR_MAP = {
     "AAPL": "Technology", "MSFT": "Technology", "NVDA": "Technology", "AMZN": "Consumer Discretionary",
@@ -67,17 +83,20 @@ tickers = st.sidebar.multiselect(
     default=["AAPL", "MSFT", "NVDA", "AMZN"]
 )
 
-benchmark = st.sidebar.selectbox(
+benchmark_name = st.sidebar.selectbox(
     "Benchmark principal",
-    BENCHMARKS,
+    list(BENCHMARK_MAP.keys()),
     index=0
 )
+benchmark = BENCHMARK_MAP[benchmark_name]
 
-extra_benchmarks = st.sidebar.multiselect(
+default_extra_benchmark_names = ["Nasdaq 100 (QQQ)", "Russell 2000 (IWM)"] if benchmark == "SPY" else []
+extra_benchmark_names = st.sidebar.multiselect(
     "Benchmarks adicionales",
-    [b for b in BENCHMARKS if b != benchmark],
-    default=["QQQ", "IWM"] if benchmark == "SPY" else []
+    [name for name in BENCHMARK_MAP.keys() if name != benchmark_name],
+    default=default_extra_benchmark_names
 )
+extra_benchmarks = [BENCHMARK_MAP[name] for name in extra_benchmark_names]
 
 start_date = st.sidebar.date_input(
     "Fecha inicial",
@@ -141,7 +160,6 @@ if returns.empty:
 # Separate portfolio assets from benchmarks
 asset_cols = [c for c in tickers if c in prices.columns]
 benchmark_col = benchmark
-benchmark_cols = [benchmark] + [b for b in extra_benchmarks if b in prices.columns]
 
 if len(asset_cols) == 0:
     st.error("No hay activos válidos seleccionados.")
@@ -222,7 +240,6 @@ forecast_df = forecast_returns.sort_values(ascending=False).rename("Expected Ret
 # -----------------------------
 # Factor exposure (simple, manual)
 # -----------------------------
-sector_weights = pd.Series({t: SECTOR_MAP.get(t, "Other") for t in asset_cols})
 factor_df = pd.DataFrame({
     "Activo": asset_cols,
     "Sector": [SECTOR_MAP.get(t, "Other") for t in asset_cols],
@@ -240,15 +257,12 @@ if bl_available:
         mu = expected_returns.mean_historical_return(asset_prices)
         S = risk_models.sample_cov(asset_prices)
 
-        # Simple views based on momentum ranking:
-        # top 2 positive views, bottom 2 negative views
         top_assets = list(momentum.head(min(2, len(momentum))).index)
         bottom_assets = list(momentum.tail(min(2, len(momentum))).index)
 
         Q = []
         P = []
 
-        # Positive views
         for t in top_assets:
             view = np.zeros(len(asset_cols))
             if t in asset_cols:
@@ -256,7 +270,6 @@ if bl_available:
                 P.append(view)
                 Q.append(float(momentum.loc[t]))
 
-        # Negative views
         for t in bottom_assets:
             view = np.zeros(len(asset_cols))
             if t in asset_cols:
@@ -287,7 +300,7 @@ col4.metric("Sharpe Ratio", f"{sharpe:.2f}")
 col5.metric("Max Drawdown", f"{max_dd_portfolio:.2%}")
 
 col6, col7, col8, col9 = st.columns(4)
-col6.metric("Benchmark", benchmark)
+col6.metric("Benchmark", benchmark_name)
 col7.metric("Rent. Benchmark", f"{benchmark_ann_return:.2%}")
 col8.metric("Mejor activo", best_asset)
 col9.metric("Momentum Sharpe", f"{mom_sharpe:.2f}")
@@ -305,7 +318,7 @@ with tab1:
     st.subheader("Comparación cartera vs benchmark")
     compare = pd.DataFrame({
         "Cartera igual ponderada": portfolio_cum,
-        benchmark: benchmark_cum
+        benchmark_name: benchmark_cum
     })
 
     fig = px.line(compare, x=compare.index, y=compare.columns, title="Evolución acumulada")
@@ -314,7 +327,7 @@ with tab1:
     for b in extra_benchmarks:
         if b in prices.columns:
             extra_cum = (1 + returns[b].dropna()).cumprod()
-            st.markdown(f"### Benchmark adicional: {b}")
+            st.markdown(f"### Benchmark adicional: {TICKER_TO_BENCHMARK_NAME.get(b, b)}")
             st.line_chart(extra_cum)
 
     st.markdown("### Métricas del modelo")
@@ -322,7 +335,7 @@ with tab1:
         "Rentabilidad anual": [ann_return, benchmark_ann_return, mom_ann_return],
         "Volatilidad anual": [ann_vol, benchmark_ann_vol, mom_ann_vol],
         "Sharpe": [sharpe, benchmark_sharpe, mom_sharpe]
-    }, index=["Cartera igual ponderada", benchmark, "Cartera Momentum"])
+    }, index=["Cartera igual ponderada", benchmark_name, "Cartera Momentum"])
 
     st.dataframe(
         metrics_df.style.format({
@@ -426,7 +439,7 @@ with tab4:
     st.subheader("Drawdown")
     drawdown_df = pd.DataFrame({
         "Cartera igual ponderada": portfolio_drawdown,
-        benchmark: benchmark_drawdown,
+        benchmark_name: benchmark_drawdown,
         "Cartera Momentum": mom_drawdown
     })
 
@@ -446,7 +459,7 @@ with tab4:
         ]
     }, index=[
         "Cartera igual ponderada",
-        benchmark,
+        benchmark_name,
         "Cartera Momentum"
     ])
 
@@ -545,7 +558,6 @@ with tab7:
         }),
         use_container_width=True
     )
-    
 
 with tab8:
     st.subheader("Últimas filas de datos")
@@ -558,7 +570,7 @@ with tab8:
 
     def build_excel() -> bytes:
         output = BytesIO()
-        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        with pd.ExcelWriter(output, engine=EXCEL_ENGINE) as writer:
             summary = pd.DataFrame({
                 "Metric": [
                     "Activos", "Rentabilidad anual", "Volatilidad anual", "Sharpe Ratio",
@@ -566,7 +578,7 @@ with tab8:
                 ],
                 "Value": [
                     len(asset_cols), ann_return, ann_vol, sharpe,
-                    max_dd_portfolio, benchmark, benchmark_ann_return, mom_sharpe
+                    max_dd_portfolio, benchmark_name, benchmark_ann_return, mom_sharpe
                 ]
             })
             summary.to_excel(writer, sheet_name="Summary", index=False)
