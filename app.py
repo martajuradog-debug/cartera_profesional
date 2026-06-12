@@ -377,9 +377,17 @@ st.divider()
 # -----------------------------
 # Tabs
 # -----------------------------
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(
-    ["Resumen", "Mercado", "Modelo", "Riesgo", "Atribución", "Factores", "Forecast", "Datos"]
-)
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(    [
+    "Resumen",
+    "Mercado",
+    "Modelo",
+    "Riesgo",
+    "Atribución",
+    "Factores",
+    "Forecast",
+    "Datos",
+    "Score Engine"
+]
 
 with tab1:
     st.subheader("Comparación cartera vs benchmark")
