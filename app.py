@@ -377,17 +377,38 @@ st.divider()
 # -----------------------------
 # Tabs
 # -----------------------------
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs(    [
-    "Resumen",
-    "Mercado",
-    "Modelo",
-    "Riesgo",
-    "Atribución",
-    "Factores",
-    "Forecast",
-    "Datos",
-    "Score Engine"
-]
+with tab9:
+    st.subheader("Investment Score Engine")
+
+    st.markdown("""
+    El modelo combina:
+
+    - 40% Momentum
+    - 40% Sharpe Ratio
+    - 20% Volatilidad inversa
+    """)
+
+    st.dataframe(
+        score_df.style.format("{:.2f}"),
+        use_container_width=True
+    )
+
+    fig_score = px.bar(
+        score_df.reset_index(),
+        x="index",
+        y="Investment Score",
+        title="Investment Score Ranking"
+    )
+
+    st.plotly_chart(
+        fig_score,
+        use_container_width=True
+    )
+
+    st.metric(
+        "Top Investment",
+        score_df.index[0]
+    )
 
 with tab1:
     st.subheader("Comparación cartera vs benchmark")
