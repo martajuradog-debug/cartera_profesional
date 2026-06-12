@@ -220,7 +220,45 @@ mom_drawdown = mom_cum / mom_cum.cummax() - 1
 max_dd_portfolio = portfolio_drawdown.min()
 max_dd_benchmark = benchmark_drawdown.min()
 max_dd_momentum = mom_drawdown.min()
+# -----------------------------
+# Investment Score Engine
+# -----------------------------
 
+momentum_score = (
+    momentum.rank(pct=True) * 100
+)
+
+asset_sharpes = (
+    (asset_returns.mean() * 252)
+    /
+    (asset_returns.std() * np.sqrt(252))
+)
+
+sharpe_score = (
+    asset_sharpes.rank(pct=True) * 100
+)
+
+vol_score = (
+    (-asset_returns.std()).rank(pct=True) * 100
+)
+
+investment_score = (
+    0.40 * momentum_score +
+    0.40 * sharpe_score +
+    0.20 * vol_score
+)
+
+score_df = pd.DataFrame({
+    "Momentum Score": momentum_score,
+    "Sharpe Score": sharpe_score,
+    "Volatility Score": vol_score,
+    "Investment Score": investment_score
+})
+
+score_df = score_df.sort_values(
+    "Investment Score",
+    ascending=False
+)
 # -----------------------------
 # Attribution
 # -----------------------------
